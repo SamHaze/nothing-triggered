@@ -139,7 +139,7 @@ Separately: device-code and other “legit flow” abuse patterns are a real phe
   - narrowing audit scope
   - excluding high-signal events
   - changing retention
-- Why it matters: visibility impairment is a known defensive evasion theme (“Impair Defenses”).
+- Why it matters: visibility impairment is a common defensive evasion pattern.
 
 ---
 
@@ -268,8 +268,8 @@ No payloads, exploit steps, or offensive how-tos.
 ## References
 
 - NIST Computer Security Incident Handling Guide (precursors / indicators in incident handling) 
-- MITRE ATT&CK: Valid Accounts (theme: “legitimate access”)
-- MITRE ATT&CK: Impair Defenses (theme: visibility and control reduction)
+- MITRE ATT&CK: Valid Accounts — legitimate access abuse
+- MITRE ATT&CK: Impair Defenses — visibility and control reduction
 - Reporting on Proofpoint research: OAuth device-code flow abuse leading to M365 takeover
 
 ---
