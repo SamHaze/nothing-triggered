@@ -1,0 +1,26 @@
+# Reference hunt: destinations first observed in the last 24 hours.
+# Requires the Splunk CIM Network_Traffic data model.
+# "First seen" is a lead only; enrich with process, DNS, reputation, and prevalence context.
+
+| tstats summariesonly=false
+    earliest(_time) as first_seen
+    latest(_time) as last_seen
+    count
+    sum(All_Traffic.bytes_out) as bytes_out
+    sum(All_Traffic.bytes_in) as bytes_in
+  from datamodel=Network_Traffic.All_Traffic
+  where earliest=-30d
+  by
+    All_Traffic.src
+    All_Traffic.dest
+    All_Traffic.dest_port
+    All_Traffic.transport
+| rename All_Traffic.* as *
+| where first_seen >= relative_time(now(), "-24h")
+| convert ctime(first_seen) ctime(last_seen)
+| sort - first_seen
+
+# Tuning:
+# - Exclude known CDNs, SaaS, software update infrastructure, and corporate egress.
+# - Join with DNS/process telemetry when available.
+# - Prefer low organizational prevalence + unusual initiating process over reputation alone.

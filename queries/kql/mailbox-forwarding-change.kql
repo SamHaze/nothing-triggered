@@ -1,0 +1,31 @@
+// Reference hunt: mailbox forwarding or redirect rule changes.
+// Data source: Microsoft 365 OfficeActivity.
+// Exact Operation/Parameters values vary by audit workload and connector.
+
+OfficeActivity
+| where TimeGenerated >= ago(14d)
+| where OfficeWorkload =~ "Exchange"
+| where Operation in~ ("New-InboxRule", "Set-InboxRule", "Set-Mailbox")
+| extend ParameterText = tostring(Parameters)
+| where ParameterText has_any (
+    "ForwardTo",
+    "ForwardAsAttachmentTo",
+    "RedirectTo",
+    "ForwardingAddress",
+    "ForwardingSmtpAddress",
+    "DeleteMessage"
+)
+| project
+    TimeGenerated,
+    UserId,
+    Operation,
+    ClientIP,
+    OfficeObjectId,
+    Parameters,
+    ResultStatus
+| order by TimeGenerated desc
+
+// Tuning:
+// - Separate internal from external forwarding destinations.
+// - Baseline shared-mailbox and workflow rules.
+// - Correlate with sign-in anomalies and OAuth consent/app activity.

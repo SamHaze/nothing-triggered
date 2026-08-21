@@ -1,0 +1,50 @@
+// Reference hunt: successful sign-ins that break the user's recent device/IP/geo story.
+// Data source: Microsoft Entra SigninLogs.
+// Tune baseline/recent windows and exclusions to your environment.
+
+let BaselineWindow = 30d;
+let RecentWindow = 24h;
+let Baseline =
+    SigninLogs
+    | where TimeGenerated between (ago(BaselineWindow) .. ago(RecentWindow))
+    | where ResultType == 0
+    | extend
+        DeviceId = tostring(DeviceDetail.deviceId),
+        Country = tostring(LocationDetails.countryOrRegion)
+    | summarize
+        KnownDevices = make_set_if(DeviceId, isnotempty(DeviceId), 256),
+        KnownIPs = make_set(IPAddress, 1024),
+        KnownCountries = make_set_if(Country, isnotempty(Country), 128)
+      by UserPrincipalName;
+SigninLogs
+| where TimeGenerated >= ago(RecentWindow)
+| where ResultType == 0
+| extend
+    DeviceId = tostring(DeviceDetail.deviceId),
+    Country = tostring(LocationDetails.countryOrRegion),
+    ClientApp = tostring(ClientAppUsed)
+| join kind=leftouter Baseline on UserPrincipalName
+| extend
+    NewDevice = isnotempty(DeviceId) and not(set_has_element(KnownDevices, DeviceId)),
+    NewIP = not(set_has_element(KnownIPs, IPAddress)),
+    NewCountry = isnotempty(Country) and not(set_has_element(KnownCountries, Country))
+| where NewDevice or NewIP or NewCountry
+| project
+    TimeGenerated,
+    UserPrincipalName,
+    AppDisplayName,
+    IPAddress,
+    Country,
+    DeviceId,
+    ClientApp,
+    NewDevice,
+    NewIP,
+    NewCountry,
+    ConditionalAccessStatus,
+    AuthenticationRequirement
+| order by TimeGenerated desc
+
+// Tuning:
+// - Exclude known VPN/proxy egress and expected travel.
+// - Consider peer-group prevalence before treating "new" as high confidence.
+// - Correlate with AuditLogs, mailbox/file access, and privileged actions.

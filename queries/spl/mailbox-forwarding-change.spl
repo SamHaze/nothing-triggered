@@ -1,0 +1,20 @@
+# Reference hunt: Microsoft 365 mailbox forwarding/rule changes.
+# Adjust index/sourcetype/field names for your Microsoft 365 ingestion.
+
+index=o365 sourcetype="o365:management:activity"
+(Operation="New-InboxRule" OR Operation="Set-InboxRule" OR Operation="Set-Mailbox")
+| eval parameter_text=coalesce(Parameters, ModifiedProperties, "")
+| where
+    like(parameter_text,"%ForwardTo%")
+    OR like(parameter_text,"%ForwardAsAttachmentTo%")
+    OR like(parameter_text,"%RedirectTo%")
+    OR like(parameter_text,"%ForwardingAddress%")
+    OR like(parameter_text,"%ForwardingSmtpAddress%")
+    OR like(parameter_text,"%DeleteMessage%")
+| table _time UserId Operation ClientIP OfficeObjectId parameter_text ResultStatus
+| sort - _time
+
+# Tuning:
+# - Extract forwarding targets and classify internal vs external.
+# - Baseline legitimate shared-mailbox/workflow rules.
+# - Correlate with authentication and OAuth/app-consent activity.

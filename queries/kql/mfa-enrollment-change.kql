@@ -1,0 +1,60 @@
+// Reference hunt: authentication/security-info change followed by successful sign-in.
+// Data sources: Entra AuditLogs + SigninLogs.
+// Operation names vary; validate against your tenant's AuditLogs values.
+
+let Lookback = 7d;
+let FollowOnWindow = 24h;
+let SecurityChanges =
+    AuditLogs
+    | where TimeGenerated >= ago(Lookback)
+    | where Category =~ "UserManagement"
+    | where OperationName has_any (
+        "security info",
+        "authentication method",
+        "Authenticator",
+        "passwordless",
+        "FIDO",
+        "phone"
+    )
+    | mv-expand TargetResources
+    | extend TargetUPN = tostring(TargetResources.userPrincipalName)
+    | where isnotempty(TargetUPN)
+    | project
+        ChangeTime = TimeGenerated,
+        TargetUPN,
+        OperationName,
+        ChangeResult = Result,
+        InitiatedBy;
+SigninLogs
+| where TimeGenerated >= ago(Lookback)
+| where ResultType == 0
+| project
+    SignInTime = TimeGenerated,
+    UserPrincipalName,
+    IPAddress,
+    AppDisplayName,
+    DeviceDetail,
+    LocationDetails,
+    AuthenticationRequirement,
+    ConditionalAccessStatus
+| join kind=inner SecurityChanges on $left.UserPrincipalName == $right.TargetUPN
+| where SignInTime between (ChangeTime .. ChangeTime + FollowOnWindow)
+| project
+    ChangeTime,
+    SignInTime,
+    UserPrincipalName,
+    OperationName,
+    ChangeResult,
+    InitiatedBy,
+    IPAddress,
+    AppDisplayName,
+    DeviceDetail,
+    LocationDetails,
+    AuthenticationRequirement,
+    ConditionalAccessStatus
+| order by SignInTime desc
+
+// Tuning:
+// - Build an allowlist for documented help-desk recovery and device-replacement workflows.
+// - Compare the actor/source of the change with the source of the subsequent sign-in.
+// - Correlate with device registration, OAuth consent, and privileged activity.

@@ -1,0 +1,47 @@
+// Reference hunt: Azure diagnostic setting deletion followed by recreation/change.
+// Data source: AzureActivity.
+// Validate operation names against your environment and resource providers.
+
+let Lookback = 14d;
+let RestoreWindow = 60m;
+let Deletes =
+    AzureActivity
+    | where TimeGenerated >= ago(Lookback)
+    | where OperationNameValue has "/diagnosticSettings/"
+    | where OperationNameValue endswith "/delete"
+    | project
+        DeleteTime = TimeGenerated,
+        Caller,
+        CallerIpAddress,
+        ResourceId,
+        DeleteOperation = OperationNameValue,
+        DeleteStatus = ActivityStatusValue;
+let Writes =
+    AzureActivity
+    | where TimeGenerated >= ago(Lookback)
+    | where OperationNameValue has "/diagnosticSettings/"
+    | where OperationNameValue endswith "/write"
+    | project
+        WriteTime = TimeGenerated,
+        Caller,
+        ResourceId,
+        WriteOperation = OperationNameValue,
+        WriteStatus = ActivityStatusValue;
+Deletes
+| join kind=inner Writes on Caller, ResourceId
+| where WriteTime between (DeleteTime .. DeleteTime + RestoreWindow)
+| project
+    DeleteTime,
+    WriteTime,
+    GapMinutes = datetime_diff("minute", WriteTime, DeleteTime),
+    Caller,
+    CallerIpAddress,
+    ResourceId,
+    DeleteStatus,
+    WriteStatus
+| order by DeleteTime desc
+
+// Tuning:
+// - Correlate activity performed against the resource during the gap.
+// - Exclude approved logging migrations and change windows.
+// - Also monitor modification events that reduce scope without deleting the setting.

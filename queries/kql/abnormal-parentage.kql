@@ -1,0 +1,32 @@
+// Reference hunt: trusted/common parent process spawning an uncommon script/shell child.
+// Data source: Microsoft Defender XDR DeviceProcessEvents.
+
+let SuspiciousParents = dynamic([
+    "winword.exe","excel.exe","powerpnt.exe","outlook.exe",
+    "chrome.exe","msedge.exe","firefox.exe","teams.exe"
+]);
+let ScriptOrShellChildren = dynamic([
+    "powershell.exe","pwsh.exe","cmd.exe","wscript.exe",
+    "cscript.exe","mshta.exe","python.exe","bash.exe"
+]);
+DeviceProcessEvents
+| where Timestamp >= ago(7d)
+| where InitiatingProcessFileName in~ (SuspiciousParents)
+| where FileName in~ (ScriptOrShellChildren)
+| project
+    Timestamp,
+    DeviceName,
+    AccountName,
+    InitiatingProcessFileName,
+    InitiatingProcessCommandLine,
+    FileName,
+    ProcessCommandLine,
+    FolderPath,
+    SHA1,
+    InitiatingProcessSHA1
+| order by Timestamp desc
+
+// Tuning:
+// - Baseline legitimate enterprise automation and software deployment.
+// - Add signer/prevalence and network/file-creation context.
+// - Treat parentage as a lead, not a verdict.

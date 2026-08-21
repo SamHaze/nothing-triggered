@@ -1,0 +1,31 @@
+# Reference hunt: common parent spawning script/shell child.
+# Requires the Splunk Common Information Model Endpoint.Processes data model.
+# Field population depends on your EDR add-on and CIM mapping.
+
+| tstats summariesonly=false
+    count
+    min(_time) as firstTime
+    max(_time) as lastTime
+    values(Processes.process) as child_command
+  from datamodel=Endpoint.Processes
+  where
+    Processes.parent_process_name IN (
+      "winword.exe","excel.exe","powerpnt.exe","outlook.exe",
+      "chrome.exe","msedge.exe","firefox.exe","teams.exe"
+    )
+    AND Processes.process_name IN (
+      "powershell.exe","pwsh.exe","cmd.exe","wscript.exe",
+      "cscript.exe","mshta.exe","python.exe","bash.exe"
+    )
+  by
+    Processes.dest
+    Processes.user
+    Processes.parent_process_name
+    Processes.process_name
+| rename Processes.* as *
+| convert ctime(firstTime) ctime(lastTime)
+| sort - lastTime
+
+# Tuning:
+# - Suppress known automation/deployment workflows.
+# - Add signer, path, prevalence, network, and file-creation context where available.
